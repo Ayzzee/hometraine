@@ -3,407 +3,872 @@
 <head>
     <meta charset="UTF-8">
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#4a90e2">
+    <meta name="theme-color" content="#0f172a">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home Trainer Dashboard - Elite Turno</title>
+    <title>Home Trainer Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
-            --primary: #4a90e2;
-            --secondary: #f39c12;
-            --bg: #f5f7fa;
-            --card: #ffffff;
-            --text: #2c3e50;
-            --muted: #7f8c8d;
+            --bg-color: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.6);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            
+            /* Power Zones */
+            --z1: #64748b; /* Recovery < 55% */
+            --z2: #3b82f6; /* Endurance 55-75% */
+            --z3: #10b981; /* Tempo 75-90% */
+            --z4: #eab308; /* Threshold 90-105% */
+            --z5: #f97316; /* VO2 Max 105-120% */
+            --z6: #ef4444; /* Anaerobic > 120% */
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        
         body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background: var(--bg); 
-            color: var(--text);
-            line-height: 1.6;
-            padding: 20px;
+            font-family: 'Inter', sans-serif; 
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
         }
 
-        .container { max-width: 800px; margin: 0 auto; }
-
-        header { text-align: center; margin-bottom: 30px; }
-        h1 { font-size: 1.8rem; color: var(--primary); margin-bottom: 5px; }
-        .status { font-style: italic; color: var(--muted); font-size: 0.9rem; }
-
-        .dashboard {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 25px;
+        /* Glassmorphism utility */
+        .glass {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border);
+            border-radius: 1rem;
         }
 
-        .card {
-            background: var(--card);
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            text-align: center;
+        /* Navbar / Tabs */
+        nav {
+            padding: 1rem;
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--card-border);
         }
 
-        .card h2 { font-size: 0.9rem; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; }
-        .card .value { font-size: 2.5rem; font-weight: bold; color: var(--primary); }
-        .card .unit { font-size: 1rem; color: var(--muted); }
-        .card .avg { margin-top: 10px; font-size: 0.9rem; color: var(--text); font-weight: 500; }
-
-        .full-card { grid-column: span 2; }
-
-        .btn-group { display: flex; gap: 10px; margin-bottom: 25px; }
-        button {
-            flex: 1;
-            padding: 15px;
+        .tab-btn {
+            background: transparent;
+            color: var(--text-secondary);
             border: none;
-            border-radius: 10px;
+            padding: 0.5rem 1rem;
             font-size: 1rem;
-            font-weight: bold;
+            font-weight: 500;
             cursor: pointer;
-            transition: all 0.3s ease;
+            border-radius: 0.5rem;
+            transition: all 0.3s;
         }
 
-        #connectBtn { background: var(--primary); color: white; }
-        #startBtn { background: #2ecc71; color: white; display: none; }
-        #stopBtn { background: #e74c3c; color: white; display: none; }
+        .tab-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+        .tab-btn.active { color: var(--text-primary); background: rgba(59, 130, 246, 0.2); color: var(--accent); }
 
-        .charts-container {
-            background: var(--card);
-            padding: 15px;
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        /* Container */
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+            width: 100%;
+            flex: 1;
         }
 
-        canvas { width: 100% !important; height: 250px !important; }
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        .tab-btn-group { display: flex; margin-bottom: 15px; background: #ddd; border-radius: 10px; padding: 5px; }
-        .tab-btn { 
-            flex: 1; padding: 8px; border: none; background: transparent; 
-            border-radius: 8px; cursor: pointer; font-weight: bold;
+        /* Header */
+        header { text-align: center; margin-bottom: 2rem; }
+        h1 { font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem; background: linear-gradient(to right, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .status { font-size: 0.9rem; color: var(--text-secondary); }
+
+        /* Buttons */
+        .btn {
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
         }
-        .tab-btn.active { background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .btn-primary { background: var(--accent); }
+        .btn-primary:hover { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
+        .btn-success { background: var(--success); }
+        .btn-danger { background: var(--danger); }
+        
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
 
-        #speedChartContainer { display: none; }
+        .metric-card {
+            padding: 1.5rem;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
 
+        .metric-title { font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+        .metric-value { font-size: 3rem; font-weight: 700; line-height: 1; margin-bottom: 0.25rem; }
+        .metric-unit { font-size: 1rem; color: var(--text-secondary); }
+        .metric-sub { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem; }
+
+        /* Workout Indicator */
+        .workout-banner {
+            display: none;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            border-left: 5px solid var(--accent);
+        }
+        .workout-banner.active { display: block; }
+        .workout-target { font-size: 1.5rem; font-weight: bold; margin: 0.5rem 0; }
+        
+        .zone-indicator {
+            height: 6px;
+            width: 100%;
+            background: #334155;
+            border-radius: 3px;
+            margin-top: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .zone-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--z1);
+            transition: width 0.3s ease, background 0.3s ease;
+        }
+
+        /* Controls */
+        .controls { display: flex; gap: 1rem; margin-bottom: 2rem; }
+        .controls .btn { flex: 1; }
+
+        /* Charts */
+        .chart-container { height: 300px; padding: 1rem; margin-bottom: 1rem; }
+
+        /* Settings & Workouts Lists */
+        .form-group { margin-bottom: 1.5rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-secondary); }
+        .form-control { width: 100%; padding: 0.8rem; border-radius: 0.5rem; border: 1px solid var(--card-border); background: rgba(0,0,0,0.2); color: white; font-size: 1rem; font-family: inherit; }
+        
+        .list-item {
+            padding: 1rem;
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+        .list-item:hover { background: rgba(255,255,255,0.05); }
+        .list-item:last-child { border-bottom: none; }
+        
+        .history-meta { font-size: 0.85rem; color: var(--text-secondary); }
+        
+        /* Console */
         #logConsole {
-            margin-top: 20px;
-            background: #1e1e1e;
-            color: #00ff00;
-            padding: 15px;
-            border-radius: 10px;
-            font-family: 'Courier New', Courier, monospace;
+            margin-top: 2rem;
+            background: rgba(0,0,0,0.5);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-family: monospace;
             font-size: 0.8rem;
-            max-height: 200px;
+            max-height: 150px;
             overflow-y: auto;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
             display: none;
         }
-        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #333; padding-bottom: 2px; }
-        .log-error { color: #ff5555; }
-        .log-warn { color: #ffff55; }
-        .log-info { color: #55ff55; }
+        .log-error { color: #ff6b6b; }
+        .log-warn { color: #fcc419; }
+        .log-info { color: #51cf66; }
     </style>
 </head>
 <body>
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./service-worker.js')
-                    .then(reg => console.log('Service Worker enregistré !'))
-                    .catch(err => console.warn('Erreur SW:', err));
-            });
-        }
-    </script>
-    
+
+    <nav>
+        <button class="tab-btn active" onclick="switchTab('dashboard')">Dashboard</button>
+        <button class="tab-btn" onclick="switchTab('workouts')">Entraînements</button>
+        <button class="tab-btn" onclick="switchTab('history')">Historique</button>
+        <button class="tab-btn" onclick="switchTab('settings')">Paramètres</button>
+    </nav>
+
     <div class="container">
-        <header>
-            <h1>CycloDash - Elite Turno</h1>
-            <p id="status" class="status">Prêt à scanner</p>
-        </header>
+        <!-- DASHBOARD TAB -->
+        <div id="dashboard" class="tab-content active">
+            <header>
+                <h1>CycloDash</h1>
+                <p id="status" class="status">Prêt à scanner</p>
+            </header>
 
-        <div class="btn-group">
-            <button id="connectBtn">🔗 Connecter le Home Trainer</button>
-            <button id="startBtn">▶ DÉBUTER L'ENTRAÎNEMENT</button>
-            <button id="stopBtn">⏹ TERMINER</button>
+            <div class="controls" id="connectionControls">
+                <button id="connectBtn" class="btn btn-primary" style="width: 100%;">🔗 Connecter le Home Trainer</button>
+                <button id="demoBtn" class="btn btn-primary" style="width: 100%; background: #6366f1;">🎮 Mode Démo</button>
+            </div>
+
+            <div class="controls" id="sessionControls" style="display: none;">
+                <button id="startBtn" class="btn btn-success">▶ DÉBUTER</button>
+                <button id="stopBtn" class="btn btn-danger" style="display: none;">⏹ TERMINER</button>
+            </div>
+
+            <div id="workoutBanner" class="glass workout-banner">
+                <div class="metric-title" id="workoutNameDisplay">Entraînement en cours</div>
+                <div class="workout-target" id="workoutTargetDisplay">Cible : --- W</div>
+                <div class="metric-sub" id="workoutTimeDisplay">Temps restant intervalle : --:--</div>
+                <div class="zone-indicator"><div id="zoneBar" class="zone-bar"></div></div>
+            </div>
+
+            <div class="dashboard-grid">
+                <div class="glass metric-card" id="wattsCard">
+                    <div class="metric-title">Puissance</div>
+                    <div class="metric-value" id="wattsVal">0</div>
+                    <div class="metric-unit">Watts</div>
+                    <div class="metric-sub" id="avgWattsVal">Moyenne: 0 W</div>
+                </div>
+                <div class="glass metric-card">
+                    <div class="metric-title">Vitesse</div>
+                    <div class="metric-value" id="speedVal">0.0</div>
+                    <div class="metric-unit">km/h</div>
+                    <div class="metric-sub" id="avgSpeedVal">Moyenne: 0.0 km/h</div>
+                </div>
+                <div class="glass metric-card">
+                    <div class="metric-title">Durée</div>
+                    <div class="metric-value" id="durationVal">00:00</div>
+                    <div class="metric-sub" id="distanceVal">0.0 km</div>
+                </div>
+            </div>
+
+            <div class="glass chart-container">
+                <canvas id="mainChart"></canvas>
+            </div>
+            
+            <div id="logConsole"></div>
         </div>
 
-        <div class="dashboard">
-            <div class="card">
-                <h2>⚡ Puissance</h2>
-                <div class="value" id="wattsVal">0</div>
-                <div class="unit">Watts</div>
-                <div class="avg" id="avgWattsVal">Moyenne : 0 W</div>
-            </div>
-            <div class="card">
-                <h2>🚴 Vitesse</h2>
-                <div class="value" id="speedVal">0.0</div>
-                <div class="unit">km/h</div>
-                <div class="avg" id="avgSpeedVal">Moyenne : 0.0 km/h</div>
-            </div>
-            <div class="card full-card">
-                <h2>⏱ Durée d'effort</h2>
-                <div class="value" id="durationVal">00:00</div>
-                <div id="sessionTime" style="font-size: 0.8rem; color: var(--muted); margin-top: 5px;"></div>
+        <!-- WORKOUTS TAB -->
+        <div id="workouts" class="tab-content">
+            <header>
+                <h1>Entraînements</h1>
+                <p class="status">Choisissez une séance structurée</p>
+            </header>
+            <div class="glass">
+                <div class="list-item">
+                    <div>
+                        <h3>Roule Libre</h3>
+                        <div class="history-meta">Aucune cible de puissance</div>
+                    </div>
+                    <button class="btn btn-primary" onclick="selectWorkout(null)">Sélectionner</button>
+                </div>
+                <div class="list-item">
+                    <div>
+                        <h3>Échauffement & Endurance (45 min)</h3>
+                        <div class="history-meta">10m Z1, 30m Z2, 5m Z1</div>
+                    </div>
+                    <button class="btn btn-primary" onclick="selectWorkout('endurance45')">Sélectionner</button>
+                </div>
+                <div class="list-item">
+                    <div>
+                        <h3>Intervalles 30/30 (30 min)</h3>
+                        <div class="history-meta">10m Z2, 10x(30s Z5 / 30s Z1), 10m Z1</div>
+                    </div>
+                    <button class="btn btn-primary" onclick="selectWorkout('intervals3030')">Sélectionner</button>
+                </div>
+                <div class="list-item">
+                    <div>
+                        <h3>Sweet Spot (40 min)</h3>
+                        <div class="history-meta">10m Z2, 2x(10m Z3/Z4, 5m Z1)</div>
+                    </div>
+                    <button class="btn btn-primary" onclick="selectWorkout('sweetspot')">Sélectionner</button>
+                </div>
             </div>
         </div>
 
-        <div class="charts-container">
-            <div class="tab-btn-group">
-                <button class="tab-btn active" onclick="showChart('watts')">Courbe Watts</button>
-                <button class="tab-btn" onclick="showChart('speed')">Courbe Vitesse</button>
-            </div>
-            <div id="wattsChartContainer">
-                <canvas id="wattsChart"></canvas>
-            </div>
-            <div id="speedChartContainer">
-                <canvas id="speedChart"></canvas>
+        <!-- HISTORY TAB -->
+        <div id="history" class="tab-content">
+            <header>
+                <h1>Historique</h1>
+                <p class="status">Vos activités passées</p>
+            </header>
+            <div class="glass" id="historyList">
+                <!-- Injected via JS -->
+                <div style="padding: 2rem; text-align: center; color: var(--text-secondary);">Aucune activité enregistrée.</div>
             </div>
         </div>
 
-        <div id="logConsole">
-            <div style="font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #00ff00;">💻 Console de Diagnostic</div>
+        <!-- SETTINGS TAB -->
+        <div id="settings" class="tab-content">
+            <header>
+                <h1>Paramètres</h1>
+                <p class="status">Personnalisez votre expérience</p>
+            </header>
+            <div class="glass" style="padding: 2rem;">
+                <div class="form-group">
+                    <label for="ftpInput">FTP (Functional Threshold Power) en Watts :</label>
+                    <input type="number" id="ftpInput" class="form-control" placeholder="ex: 200" value="">
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                        Sert à calculer vos zones de puissance. Si vide, des valeurs par défaut seront utilisées.
+                    </p>
+                </div>
+                <button class="btn btn-success" onclick="saveSettings()">Enregistrer</button>
+
+                <div id="zonesDisplay" style="margin-top: 2rem; display: none;">
+                    <h3>Vos Zones Estimées</h3>
+                    <div style="display: grid; gap: 0.5rem; margin-top: 1rem; font-size: 0.9rem;">
+                        <div style="color: var(--z1);">Z1 (Récupération) : <span id="z1Val"></span></div>
+                        <div style="color: var(--z2);">Z2 (Endurance) : <span id="z2Val"></span></div>
+                        <div style="color: var(--z3);">Z3 (Tempo) : <span id="z3Val"></span></div>
+                        <div style="color: var(--z4);">Z4 (Seuil) : <span id="z4Val"></span></div>
+                        <div style="color: var(--z5);">Z5 (VO2 Max) : <span id="z5Val"></span></div>
+                        <div style="color: var(--z6);">Z6 (Anaérobie) : <span id="z6Val"></span></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
-        // Configuration
+        // --- GLOBAL VARIABLES ---
         const WHEEL_CIRCUMFERENCE_M = 0.135; // Calibration Turno
-
-        // Variables d'état
         let device, server;
         let isRecording = false;
+        let isDemoMode = false;
+        let demoInterval = null;
         let startTime, stopTime;
-        let pedalingTime = 0; // en secondes
+        
+        let pedalingTime = 0; // seconds
+        let totalDistanceM = 0;
         let sumWatts = 0;
         let sumSpeed = 0;
-        let lastUpdate = Date.now();
         
         let lastWheelRevs = null;
         let lastWheelTime = null;
         let currentWatts = 0;
         let currentSpeed = 0;
+        
+        let ftp = 200; // Default
+        let activeWorkout = null;
+        let currentWorkoutStepIndex = 0;
+        let workoutStepTimeElapsed = 0;
 
-        const history = { time: [], watts: [], speed: [] };
+        const sessionData = { time: [], watts: [], speed: [] };
 
-        // Éléments UI
+        // --- WORKOUT DEFINITIONS ---
+        const workoutsDB = {
+            'endurance45': {
+                name: 'Échauffement & Endurance',
+                steps: [
+                    { type: 'Z1', duration: 10 * 60, desc: 'Échauffement' },
+                    { type: 'Z2', duration: 30 * 60, desc: 'Endurance' },
+                    { type: 'Z1', duration: 5 * 60, desc: 'Retour au calme' }
+                ]
+            },
+            'intervals3030': {
+                name: 'Intervalles 30/30',
+                steps: [
+                    { type: 'Z2', duration: 10 * 60, desc: 'Échauffement' },
+                    ...Array(10).fill().flatMap(() => [
+                        { type: 'Z5', duration: 30, desc: 'Effort Maximal !' },
+                        { type: 'Z1', duration: 30, desc: 'Récupération' }
+                    ]),
+                    { type: 'Z1', duration: 10 * 60, desc: 'Retour au calme' }
+                ]
+            },
+            'sweetspot': {
+                name: 'Sweet Spot',
+                steps: [
+                    { type: 'Z2', duration: 10 * 60, desc: 'Échauffement' },
+                    { type: 'Z3', duration: 10 * 60, desc: 'Sweet Spot 1' },
+                    { type: 'Z1', duration: 5 * 60, desc: 'Récup active' },
+                    { type: 'Z3', duration: 10 * 60, desc: 'Sweet Spot 2' },
+                    { type: 'Z1', duration: 5 * 60, desc: 'Retour au calme' }
+                ]
+            }
+        };
+
+        // --- DOM ELEMENTS ---
         const connectBtn = document.getElementById('connectBtn');
+        const demoBtn = document.getElementById('demoBtn');
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
+        const sessionControls = document.getElementById('sessionControls');
+        const connectionControls = document.getElementById('connectionControls');
         const statusTxt = document.getElementById('status');
         const logConsole = document.getElementById('logConsole');
+        
+        // --- INITIALIZATION ---
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSettings();
+            renderHistory();
+            initChart();
+        });
+
+        // --- UI LOGIC ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            document.querySelector(`.tab-btn[onclick="switchTab('${tabId}')"]`).classList.add('active');
+        }
 
         function debugLog(msg, type = 'info') {
             console.log(`[${type.toUpperCase()}] ${msg}`);
-            logConsole.style.display = 'block';
-            const entry = document.createElement('div');
-            entry.className = `log-entry log-${type}`;
-            const now = new Date();
-            const timeStr = now.getHours().toString().padStart(2, '0') + ":" + 
-                            now.getMinutes().toString().padStart(2, '0') + ":" + 
-                            now.getSeconds().toString().padStart(2, '0');
-            entry.innerText = `[${timeStr}] ${msg}`;
-            logConsole.appendChild(entry);
-            logConsole.scrollTop = logConsole.scrollHeight;
+            // Uncomment to show console in UI
+            // logConsole.style.display = 'block';
+            // const entry = document.createElement('div');
+            // entry.className = `log-${type}`;
+            // entry.innerText = msg;
+            // logConsole.appendChild(entry);
+            // logConsole.scrollTop = logConsole.scrollHeight;
         }
 
-        // Vérifications initiales
-        window.addEventListener('DOMContentLoaded', () => {
-            debugLog("Démarrage du tableau de bord...");
+        function formatTime(seconds) {
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        // --- SETTINGS LOGIC ---
+        function loadSettings() {
+            const savedFtp = localStorage.getItem('userFTP');
+            if (savedFtp) {
+                ftp = parseInt(savedFtp);
+                document.getElementById('ftpInput').value = ftp;
+                updateZonesDisplay();
+            }
+        }
+
+        function saveSettings() {
+            const val = document.getElementById('ftpInput').value;
+            if (val && parseInt(val) > 0) {
+                ftp = parseInt(val);
+                localStorage.setItem('userFTP', ftp);
+                updateZonesDisplay();
+                alert('Paramètres enregistrés !');
+            }
+        }
+
+        function updateZonesDisplay() {
+            document.getElementById('zonesDisplay').style.display = 'block';
+            document.getElementById('z1Val').innerText = `< ${Math.round(ftp * 0.55)} W`;
+            document.getElementById('z2Val').innerText = `${Math.round(ftp * 0.55)} - ${Math.round(ftp * 0.75)} W`;
+            document.getElementById('z3Val').innerText = `${Math.round(ftp * 0.76)} - ${Math.round(ftp * 0.90)} W`;
+            document.getElementById('z4Val').innerText = `${Math.round(ftp * 0.91)} - ${Math.round(ftp * 1.05)} W`;
+            document.getElementById('z5Val').innerText = `${Math.round(ftp * 1.06)} - ${Math.round(ftp * 1.20)} W`;
+            document.getElementById('z6Val').innerText = `> ${Math.round(ftp * 1.20)} W`;
+        }
+
+        function getZoneTargetString(zoneStr) {
+            switch(zoneStr) {
+                case 'Z1': return `< ${Math.round(ftp * 0.55)} W`;
+                case 'Z2': return `${Math.round(ftp * 0.55)}-${Math.round(ftp * 0.75)} W`;
+                case 'Z3': return `${Math.round(ftp * 0.76)}-${Math.round(ftp * 0.90)} W`;
+                case 'Z4': return `${Math.round(ftp * 0.91)}-${Math.round(ftp * 1.05)} W`;
+                case 'Z5': return `${Math.round(ftp * 1.06)}-${Math.round(ftp * 1.20)} W`;
+                case 'Z6': return `> ${Math.round(ftp * 1.20)} W`;
+                default: return '--- W';
+            }
+        }
+        
+        function getZoneColor(zoneStr) {
+            const root = getComputedStyle(document.documentElement);
+            switch(zoneStr) {
+                case 'Z1': return root.getPropertyValue('--z1').trim();
+                case 'Z2': return root.getPropertyValue('--z2').trim();
+                case 'Z3': return root.getPropertyValue('--z3').trim();
+                case 'Z4': return root.getPropertyValue('--z4').trim();
+                case 'Z5': return root.getPropertyValue('--z5').trim();
+                case 'Z6': return root.getPropertyValue('--z6').trim();
+                default: return '#334155';
+            }
+        }
+
+        // --- WORKOUT LOGIC ---
+        function selectWorkout(workoutId) {
+            if (!workoutId) {
+                activeWorkout = null;
+                alert("Entraînement libre sélectionné.");
+            } else {
+                activeWorkout = workoutsDB[workoutId];
+                alert(`Entraînement "${activeWorkout.name}" sélectionné.`);
+            }
+            switchTab('dashboard');
+        }
+
+        function updateWorkoutBanner() {
+            const banner = document.getElementById('workoutBanner');
+            if (!activeWorkout || !isRecording) {
+                banner.classList.remove('active');
+                return;
+            }
+            banner.classList.add('active');
+
+            if (currentWorkoutStepIndex >= activeWorkout.steps.length) {
+                document.getElementById('workoutNameDisplay').innerText = "Entraînement terminé ! (Roule libre)";
+                document.getElementById('workoutTargetDisplay').innerText = "Cible : ---";
+                document.getElementById('workoutTimeDisplay').innerText = "";
+                document.getElementById('zoneBar').style.width = "0%";
+                banner.style.borderLeftColor = "var(--success)";
+                return;
+            }
+
+            const step = activeWorkout.steps[currentWorkoutStepIndex];
+            const timeRemaining = step.duration - workoutStepTimeElapsed;
+
+            document.getElementById('workoutNameDisplay').innerText = `${activeWorkout.name} - ${step.desc} (${currentWorkoutStepIndex + 1}/${activeWorkout.steps.length})`;
+            document.getElementById('workoutTargetDisplay').innerText = `Cible : Zone ${step.type} (${getZoneTargetString(step.type)})`;
+            document.getElementById('workoutTimeDisplay').innerText = `Temps restant : ${formatTime(timeRemaining)}`;
             
-            if (!window.isSecureContext) {
-                debugLog("ATTENTION : Le Bluetooth nécessite un contexte sécurisé (HTTPS). Si vous êtes en HTTP, cela ne fonctionnera pas.", "error");
-            } else {
-                debugLog("Contexte sécurisé (HTTPS) détecté.", "info");
+            const color = getZoneColor(step.type);
+            banner.style.borderLeftColor = color;
+            document.getElementById('zoneBar').style.background = color;
+            
+            // Calculer où on se situe en Watts (Visuel)
+            let pct = (currentWatts / (ftp * 1.5)) * 100;
+            if (pct > 100) pct = 100;
+            document.getElementById('zoneBar').style.width = `${pct}%`;
+
+            // Avancer à la prochaine étape
+            workoutStepTimeElapsed++;
+            if (workoutStepTimeElapsed >= step.duration) {
+                currentWorkoutStepIndex++;
+                workoutStepTimeElapsed = 0;
+                // Bip sonore optionnel ici
             }
-
-            if (!navigator.bluetooth) {
-                debugLog("Web Bluetooth n'est pas supporté par ce navigateur ou est désactivé.", "error");
-                if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
-                    debugLog("Sur iOS, utilisez une application comme 'Bluefy' ou 'WebBLE' car Safari/Chrome ne supportent pas Web Bluetooth.", "warn");
-                }
-            } else {
-                debugLog("API Bluetooth détectée.", "info");
-            }
-        });
-
-        // Initialisation Charts
-        const ctxWatts = document.getElementById('wattsChart').getContext('2d');
-        const wattsChart = new Chart(ctxWatts, {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Puissance (W)', borderColor: '#4a90e2', backgroundColor: 'rgba(74, 144, 226, 0.1)', data: [], fill: true, tension: 0.3 }] },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, animation: false }
-        });
-
-        const ctxSpeed = document.getElementById('speedChart').getContext('2d');
-        const speedChart = new Chart(ctxSpeed, {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Vitesse (km/h)', borderColor: '#f39c12', backgroundColor: 'rgba(243, 156, 18, 0.1)', data: [], fill: true, tension: 0.3 }] },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, animation: false }
-        });
-
-        function showChart(type) {
-            document.getElementById('wattsChartContainer').style.display = type === 'watts' ? 'block' : 'none';
-            document.getElementById('speedChartContainer').style.display = type === 'speed' ? 'block' : 'none';
-            document.querySelectorAll('.tab-btn').forEach((btn, i) => btn.classList.toggle('active', (type === 'watts' && i === 0) || (type === 'speed' && i === 1)));
         }
 
-        // --- BLUETOOTH LOGIC ---
-        connectBtn.onclick = async () => {
-            debugLog("Tentative de connexion Bluetooth...");
-            try {
-                if (!navigator.bluetooth) {
-                    throw new Error("Navigateur non compatible Web Bluetooth");
-                }
+        // --- BLUETOOTH & DEMO LOGIC ---
+        demoBtn.onclick = () => {
+            isDemoMode = true;
+            connectionControls.style.display = 'none';
+            sessionControls.style.display = 'flex';
+            statusTxt.innerText = "Connecté (Mode Démo)";
+            
+            // Simuler la réception de données toutes les secondes
+            demoInterval = setInterval(() => {
+                // Variations aléatoires douces
+                currentWatts = Math.max(0, currentWatts + (Math.random() * 20 - 10));
+                if (currentWatts === 0) currentWatts = 150; // Kickstart
+                currentSpeed = Math.max(0, currentSpeed + (Math.random() * 2 - 1));
+                if (currentSpeed === 0) currentSpeed = 25;
 
+                document.getElementById('wattsVal').innerText = Math.round(currentWatts);
+                document.getElementById('speedVal').innerText = currentSpeed.toFixed(1);
+            }, 1000);
+        };
+
+        connectBtn.onclick = async () => {
+            try {
                 statusTxt.innerText = "Recherche d'appareils...";
-                debugLog("Ouverture de la fenêtre de sélection d'appareil...");
-                
                 device = await navigator.bluetooth.requestDevice({
                     filters: [{ namePrefix: 'TURNO' }, { namePrefix: 'MISURO' }, { namePrefix: 'ELITE' }],
                     optionalServices: [0x1818, 0x1816]
                 });
-
-                debugLog(`Appareil sélectionné : ${device.name}`);
-                statusTxt.innerText = `Connexion à ${device.name}...`;
                 
-                debugLog("Connexion au serveur GATT...");
+                statusTxt.innerText = `Connexion à ${device.name}...`;
                 server = await device.gatt.connect();
-                debugLog("Serveur GATT connecté.");
 
-                // Service Puissance
                 try {
-                    debugLog("Recherche du service Puissance (0x1818)...");
                     const powerService = await server.getPrimaryService(0x1818);
-                    debugLog("Service Puissance trouvé. Recherche de la caractéristique...");
                     const powerChar = await powerService.getCharacteristic(0x2a63);
-                    debugLog("Caractéristique trouvée. Activation des notifications...");
                     await powerChar.startNotifications();
-                    powerChar.addEventListener('characteristicvaluechanged', handlePower);
-                    debugLog("Notifications Puissance activées.");
-                } catch(e) { 
-                    debugLog(`Service Puissance non trouvé ou erreur: ${e.message}`, "warn");
-                }
+                    powerChar.addEventListener('characteristicvaluechanged', (e) => {
+                        currentWatts = e.target.value.getUint16(2, true);
+                        document.getElementById('wattsVal').innerText = currentWatts;
+                    });
+                } catch(e) { debugLog("Puissance non dispo", "warn"); }
 
-                // Service Vitesse
                 try {
-                    debugLog("Recherche du service Vitesse (0x1816)...");
                     const speedService = await server.getPrimaryService(0x1816);
-                    debugLog("Service Vitesse trouvé. Recherche de la caractéristique...");
                     const speedChar = await speedService.getCharacteristic(0x2a5b);
-                    debugLog("Caractéristique trouvée. Activation des notifications...");
                     await speedChar.startNotifications();
-                    speedChar.addEventListener('characteristicvaluechanged', handleSpeed);
-                    debugLog("Notifications Vitesse activées.");
-                } catch(e) { 
-                    debugLog(`Service Vitesse non trouvé ou erreur: ${e.message}`, "warn");
-                }
+                    speedChar.addEventListener('characteristicvaluechanged', (e) => {
+                        const data = e.target.value;
+                        const cumulativeWheelRevs = data.getUint32(1, true);
+                        const lastWheelEventTime = data.getUint16(5, true);
+
+                        if (lastWheelRevs !== null) {
+                            let dRevs = cumulativeWheelRevs - lastWheelRevs;
+                            let dTime = lastWheelEventTime - lastWheelTime;
+                            if (dTime < 0) dTime += 65536;
+                            if (dRevs < 0) dRevs += 4294967296;
+
+                            if (dTime > 0) {
+                                const timeS = dTime / 1024.0;
+                                const dist = dRevs * WHEEL_CIRCUMFERENCE_M;
+                                currentSpeed = (dist / timeS) * 3.6;
+                                document.getElementById('speedVal').innerText = currentSpeed.toFixed(1);
+                            }
+                        }
+                        lastWheelRevs = cumulativeWheelRevs;
+                        lastWheelTime = lastWheelEventTime;
+                    });
+                } catch(e) { debugLog("Vitesse non dispo", "warn"); }
 
                 statusTxt.innerText = `Connecté à ${device.name}`;
-                debugLog("Système prêt !");
-                connectBtn.style.display = 'none';
-                startBtn.style.display = 'block';
+                connectionControls.style.display = 'none';
+                sessionControls.style.display = 'flex';
                 
-                // Lancer la boucle de mise à jour
-                setInterval(tick, 1000);
-
             } catch (error) {
-                console.error(error);
-                debugLog(`ERREUR : ${error.message}`, "error");
-                statusTxt.innerText = "Erreur : " + error.message;
+                statusTxt.innerText = "Erreur de connexion";
+                alert(error.message);
             }
         };
 
-        function handlePower(event) {
-            const data = event.target.value;
-            // Byte 0-1 flags, Byte 2-3 Watts (uint16)
-            currentWatts = data.getUint16(2, true);
-            document.getElementById('wattsVal').innerText = currentWatts;
-        }
-
-        function handleSpeed(event) {
-            const data = event.target.value;
-            const cumulativeWheelRevs = data.getUint32(1, true);
-            const lastWheelEventTime = data.getUint16(5, true);
-
-            if (lastWheelRevs !== null) {
-                let dRevs = cumulativeWheelRevs - lastWheelRevs;
-                let dTime = lastWheelEventTime - lastWheelTime;
-
-                if (dTime < 0) dTime += 65536;
-                if (dRevs < 0) dRevs += 4294967296;
-
-                if (dTime > 0) {
-                    const timeS = dTime / 1024.0;
-                    const distanceM = dRevs * WHEEL_CIRCUMFERENCE_M;
-                    currentSpeed = (distanceM / timeS) * 3.6;
-                    document.getElementById('speedVal').innerText = currentSpeed.toFixed(1);
-                }
-            }
-            lastWheelRevs = cumulativeWheelRevs;
-            lastWheelTime = lastWheelEventTime;
-        }
-
         // --- SESSION LOGIC ---
+        let sessionTickInterval;
+        let chartInstance;
+
+        function initChart() {
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            Chart.defaults.color = '#94a3b8';
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { 
+                    labels: [], 
+                    datasets: [
+                        { label: 'Puissance (W)', borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', data: [], yAxisID: 'y' },
+                        { label: 'Vitesse (km/h)', borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.0)', data: [], yAxisID: 'y1' }
+                    ] 
+                },
+                options: { 
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    elements: { point: { radius: 0 } },
+                    scales: { 
+                        y: { type: 'linear', display: true, position: 'left', title: {display: true, text: 'Watts'} },
+                        y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: {display: true, text: 'km/h'} }
+                    } 
+                }
+            });
+        }
+
         startBtn.onclick = () => {
             isRecording = true;
             startTime = new Date();
-            sumWatts = 0; sumSpeed = 0; pedalingTime = 0;
-            history.time = []; history.watts = []; history.speed = [];
+            pedalingTime = 0; totalDistanceM = 0; sumWatts = 0; sumSpeed = 0;
+            currentWorkoutStepIndex = 0; workoutStepTimeElapsed = 0;
+            
+            sessionData.time = []; sessionData.watts = []; sessionData.speed = [];
+            
             startBtn.style.display = 'none';
             stopBtn.style.display = 'block';
-            document.getElementById('sessionTime').innerText = `Début : ${startTime.toLocaleTimeString()}`;
+            
+            sessionTickInterval = setInterval(tick, 1000);
         };
 
         stopBtn.onclick = () => {
             isRecording = false;
             stopTime = new Date();
+            clearInterval(sessionTickInterval);
+            
             startBtn.style.display = 'block';
             stopBtn.style.display = 'none';
-            document.getElementById('sessionTime').innerText += ` | Fin : ${stopTime.toLocaleTimeString()}`;
+            document.getElementById('workoutBanner').classList.remove('active');
+            
+            saveSessionToHistory();
         };
 
         function tick() {
             if (!isRecording) return;
 
-            const now = Date.now();
+            // Enregistrer uniquement si on pédale (ou qu'on roule)
             if (currentWatts > 0 || currentSpeed > 0.5) {
                 pedalingTime += 1;
                 sumWatts += currentWatts;
                 sumSpeed += currentSpeed;
+                totalDistanceM += (currentSpeed / 3.6); // Vitesse en m/s par 1s
             }
 
-            // Moyennes
+            // Mise à jour de l'UI
             if (pedalingTime > 0) {
-                document.getElementById('avgWattsVal').innerText = `Moyenne : ${Math.round(sumWatts / pedalingTime)} W`;
-                document.getElementById('avgSpeedVal').innerText = `Moyenne : ${(sumSpeed / pedalingTime).toFixed(1)} km/h`;
+                document.getElementById('avgWattsVal').innerText = `Moyenne: ${Math.round(sumWatts / pedalingTime)} W`;
+                document.getElementById('avgSpeedVal').innerText = `Moyenne: ${(sumSpeed / pedalingTime).toFixed(1)} km/h`;
+                document.getElementById('durationVal').innerText = formatTime(pedalingTime);
+                document.getElementById('distanceVal').innerText = `${(totalDistanceM / 1000).toFixed(2)} km`;
                 
-                const mins = Math.floor(pedalingTime / 60);
-                const secs = pedalingTime % 60;
-                document.getElementById('durationVal').innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                // Card colors based on zones
+                const wCard = document.getElementById('wattsCard');
+                let zoneStr = 'Z1';
+                if (currentWatts > ftp*1.2) zoneStr = 'Z6';
+                else if (currentWatts > ftp*1.05) zoneStr = 'Z5';
+                else if (currentWatts > ftp*0.9) zoneStr = 'Z4';
+                else if (currentWatts > ftp*0.75) zoneStr = 'Z3';
+                else if (currentWatts > ftp*0.55) zoneStr = 'Z2';
+                
+                wCard.style.borderBottom = `4px solid ${getZoneColor(zoneStr)}`;
             }
 
-            // Charts
-            const elapsed = Math.round((now - startTime.getTime()) / 1000);
-            history.time.push(elapsed);
-            history.watts.push(currentWatts);
-            history.speed.push(currentSpeed);
+            // Gestion de l'entrainement structuré
+            updateWorkoutBanner();
 
-            // Garder seulement les 300 derniers points pour la fluidité
-            if (history.time.length > 300) {
-                history.time.shift(); history.watts.shift(); history.speed.shift();
-            }
+            // Mémorisation pour le chart et l'export
+            sessionData.time.push(pedalingTime);
+            sessionData.watts.push(currentWatts);
+            sessionData.speed.push(currentSpeed);
 
-            wattsChart.data.labels = history.time;
-            wattsChart.data.datasets[0].data = history.watts;
-            wattsChart.update();
-
-            speedChart.data.labels = history.time;
-            speedChart.data.datasets[0].data = history.speed;
-            speedChart.update();
+            // Mise à jour du graphique (on garde max 600 points pour la perfo visuelle, mais on garde tout dans sessionData)
+            const displayLen = 600;
+            chartInstance.data.labels = sessionData.time.slice(-displayLen).map(t => formatTime(t));
+            chartInstance.data.datasets[0].data = sessionData.watts.slice(-displayLen);
+            chartInstance.data.datasets[1].data = sessionData.speed.slice(-displayLen);
+            chartInstance.update();
         }
+
+        // --- HISTORY & EXPORT LOGIC ---
+        function saveSessionToHistory() {
+            if (pedalingTime < 10) {
+                alert("Session trop courte pour être sauvegardée.");
+                return;
+            }
+
+            const sessionSummary = {
+                id: Date.now(),
+                date: startTime.toISOString(),
+                duration: pedalingTime,
+                distance: totalDistanceM,
+                avgWatts: Math.round(sumWatts / pedalingTime),
+                avgSpeed: (sumSpeed / pedalingTime).toFixed(1),
+                // Ne sauvegardons pas tout le tableau de data dans le localStorage pour éviter de le saturer,
+                // mais si on veut exporter, il faut la garder en mémoire pour cette session.
+                // Dans une vraie app on utiliserait IndexedDB. Ici on permet l'export immédiat.
+                data: sessionData 
+            };
+
+            let histories = JSON.parse(localStorage.getItem('cyclodash_history') || '[]');
+            // On ne sauvegarde pas le tableau "data" dans le localStorage, juste le résumé
+            const saveObj = {...sessionSummary};
+            delete saveObj.data;
+            histories.unshift(saveObj);
+            
+            // Garder les 20 dernières
+            if(histories.length > 20) histories.pop();
+            
+            localStorage.setItem('cyclodash_history', JSON.stringify(histories));
+            
+            // Demander si on veut télécharger le TCX de suite
+            if(confirm("Session terminée ! Voulez-vous télécharger le fichier Strava (.tcx) maintenant ?")) {
+                exportTCX(sessionSummary);
+            }
+
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const list = document.getElementById('historyList');
+            const histories = JSON.parse(localStorage.getItem('cyclodash_history') || '[]');
+            
+            if (histories.length === 0) return;
+            
+            list.innerHTML = '';
+            histories.forEach(h => {
+                const dateObj = new Date(h.date);
+                const dateStr = dateObj.toLocaleDateString() + ' à ' + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                item.innerHTML = `
+                    <div>
+                        <h3>Sortie du ${dateStr}</h3>
+                        <div class="history-meta">
+                            ⏱ ${formatTime(h.duration)} | 📏 ${(h.distance/1000).toFixed(1)} km | ⚡ ${h.avgWatts} W moy | 🚴 ${h.avgSpeed} km/h
+                        </div>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        // --- TCX GENERATION (STRAVA EXPORT) ---
+        function exportTCX(session) {
+            // Un fichier TCX est un XML.
+            // On reconstruit les trackpoints seconde par seconde.
+            const dateIso = session.date;
+            
+            let trackpoints = '';
+            let currentDist = 0;
+            
+            const startD = new Date(session.date);
+
+            for (let i = 0; i < session.data.time.length; i++) {
+                const w = session.data.watts[i];
+                const s = session.data.speed[i]; // km/h
+                currentDist += (s / 3.6); // meters
+                
+                // Timestamp du point
+                const ptDate = new Date(startD.getTime() + (i * 1000));
+                
+                trackpoints += `
+            <Trackpoint>
+              <Time>${ptDate.toISOString()}</Time>
+              <DistanceMeters>${currentDist.toFixed(2)}</DistanceMeters>
+              <Cadence>0</Cadence>
+              <Extensions>
+                <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+                  <Watts>${Math.round(w)}</Watts>
+                  <Speed>${(s / 3.6).toFixed(2)}</Speed>
+                </TPX>
+              </Extensions>
+            </Trackpoint>`;
+            }
+
+            const tcx = `<?xml version="1.0" encoding="UTF-8"?>
+<TrainingCenterDatabase xsi:schemaLocation="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2 http://www.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd" xmlns:ns5="http://www.garmin.com/xmlschemas/Routing/v1" xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2" xmlns:ns2="http://www.garmin.com/xmlschemas/UserProfile/v2" xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ns4="http://www.garmin.com/xmlschemas/ProfileExtension/v1">
+  <Activities>
+    <Activity Sport="Biking">
+      <Id>${dateIso}</Id>
+      <Lap StartTime="${dateIso}">
+        <TotalTimeSeconds>${session.duration}</TotalTimeSeconds>
+        <DistanceMeters>${session.distance.toFixed(2)}</DistanceMeters>
+        <Calories>0</Calories>
+        <Intensity>Active</Intensity>
+        <TriggerMethod>Manual</TriggerMethod>
+        <Track>
+            ${trackpoints}
+        </Track>
+      </Lap>
+    </Activity>
+  </Activities>
+</TrainingCenterDatabase>`;
+
+            const blob = new Blob([tcx], {type: "application/vnd.garmin.tcx+xml"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `CycloDash_${dateIso.replace(/[:.]/g, '-')}.tcx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
     </script>
 </body>
 </html>
