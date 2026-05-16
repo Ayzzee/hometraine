@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4a90e2">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Trainer Dashboard - Elite Turno</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --secondary: #f39c12;
+            --bg: #f5f7fa;
+            --card: #ffffff;
+            --text: #2c3e50;
+            --muted: #7f8c8d;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: var(--bg); 
+            color: var(--text);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container { max-width: 800px; margin: 0 auto; }
+
+        header { text-align: center; margin-bottom: 30px; }
+        h1 { font-size: 1.8rem; color: var(--primary); margin-bottom: 5px; }
+        .status { font-style: italic; color: var(--muted); font-size: 0.9rem; }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .card {
+            background: var(--card);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+
+        .card h2 { font-size: 0.9rem; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; }
+        .card .value { font-size: 2.5rem; font-weight: bold; color: var(--primary); }
+        .card .unit { font-size: 1rem; color: var(--muted); }
+        .card .avg { margin-top: 10px; font-size: 0.9rem; color: var(--text); font-weight: 500; }
+
+        .full-card { grid-column: span 2; }
+
+        .btn-group { display: flex; gap: 10px; margin-bottom: 25px; }
+        button {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        #connectBtn { background: var(--primary); color: white; }
+        #startBtn { background: #2ecc71; color: white; display: none; }
+        #stopBtn { background: #e74c3c; color: white; display: none; }
+
+        .charts-container {
+            background: var(--card);
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        canvas { width: 100% !important; height: 250px !important; }
+
+        .tab-btn-group { display: flex; margin-bottom: 15px; background: #ddd; border-radius: 10px; padding: 5px; }
+        .tab-btn { 
+            flex: 1; padding: 8px; border: none; background: transparent; 
+            border-radius: 8px; cursor: pointer; font-weight: bold;
+        }
+        .tab-btn.active { background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+        #speedChartContainer { display: none; }
+    </style>
+</head>
+<body>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .then(reg => console.log('Service Worker enregistré !'))
+                    .catch(err => console.warn('Erreur SW:', err));
+            });
+        }
+    </script>
+    
+    <div class="container">
+        <header>
+            <h1>CycloDash - Elite Turno</h1>
+            <p id="status" class="status">Prêt à scanner</p>
+        </header>
+
+        <div class="btn-group">
+            <button id="connectBtn">🔗 Connecter le Home Trainer</button>
+            <button id="startBtn">▶ DÉBUTER L'ENTRAÎNEMENT</button>
+            <button id="stopBtn">⏹ TERMINER</button>
+        </div>
+
+        <div class="dashboard">
+            <div class="card">
+                <h2>⚡ Puissance</h2>
+                <div class="value" id="wattsVal">0</div>
+                <div class="unit">Watts</div>
+                <div class="avg" id="avgWattsVal">Moyenne : 0 W</div>
+            </div>
+            <div class="card">
+                <h2>🚴 Vitesse</h2>
+                <div class="value" id="speedVal">0.0</div>
+                <div class="unit">km/h</div>
+                <div class="avg" id="avgSpeedVal">Moyenne : 0.0 km/h</div>
+            </div>
+            <div class="card full-card">
+                <h2>⏱ Durée d'effort</h2>
+                <div class="value" id="durationVal">00:00</div>
+                <div id="sessionTime" style="font-size: 0.8rem; color: var(--muted); margin-top: 5px;"></div>
+            </div>
+        </div>
+
+        <div class="charts-container">
+            <div class="tab-btn-group">
+                <button class="tab-btn active" onclick="showChart('watts')">Courbe Watts</button>
+                <button class="tab-btn" onclick="showChart('speed')">Courbe Vitesse</button>
+            </div>
+            <div id="wattsChartContainer">
+                <canvas id="wattsChart"></canvas>
+            </div>
+            <div id="speedChartContainer">
+                <canvas id="speedChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const WHEEL_CIRCUMFERENCE_M = 0.135; // Calibration Turno
+
+        // Variables d'état
+        let device, server;
+        let isRecording = false;
+        let startTime, stopTime;
+        let pedalingTime = 0; // en secondes
+        let sumWatts = 0;
+        let sumSpeed = 0;
+        let lastUpdate = Date.now();
+        
+        let lastWheelRevs = null;
+        let lastWheelTime = null;
+        let currentWatts = 0;
+        let currentSpeed = 0;
+
+        const history = { time: [], watts: [], speed: [] };
+
+        // Éléments UI
+        const connectBtn = document.getElementById('connectBtn');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusTxt = document.getElementById('status');
+
+        // Initialisation Charts
+        const ctxWatts = document.getElementById('wattsChart').getContext('2d');
+        const wattsChart = new Chart(ctxWatts, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Puissance (W)', borderColor: '#4a90e2', backgroundColor: 'rgba(74, 144, 226, 0.1)', data: [], fill: true, tension: 0.3 }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, animation: false }
+        });
+
+        const ctxSpeed = document.getElementById('speedChart').getContext('2d');
+        const speedChart = new Chart(ctxSpeed, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Vitesse (km/h)', borderColor: '#f39c12', backgroundColor: 'rgba(243, 156, 18, 0.1)', data: [], fill: true, tension: 0.3 }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, animation: false }
+        });
+
+        function showChart(type) {
+            document.getElementById('wattsChartContainer').style.display = type === 'watts' ? 'block' : 'none';
+            document.getElementById('speedChartContainer').style.display = type === 'speed' ? 'block' : 'none';
+            document.querySelectorAll('.tab-btn').forEach((btn, i) => btn.classList.toggle('active', (type === 'watts' && i === 0) || (type === 'speed' && i === 1)));
+        }
+
+        // --- BLUETOOTH LOGIC ---
+        connectBtn.onclick = async () => {
+            try {
+                statusTxt.innerText = "Recherche d'appareils...";
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'TURNO' }, { namePrefix: 'MISURO' }, { namePrefix: 'ELITE' }],
+                    optionalServices: [0x1818, 0x1816]
+                });
+
+                statusTxt.innerText = `Connexion à ${device.name}...`;
+                server = await device.gatt.connect();
+
+                // Service Puissance
+                try {
+                    const powerService = await server.getPrimaryService(0x1818);
+                    const powerChar = await powerService.getCharacteristic(0x2a63);
+                    await powerChar.startNotifications();
+                    powerChar.addEventListener('characteristicvaluechanged', handlePower);
+                } catch(e) { console.warn("Pas de service puissance séparé"); }
+
+                // Service Vitesse
+                try {
+                    const speedService = await server.getPrimaryService(0x1816);
+                    const speedChar = await speedService.getCharacteristic(0x2a5b);
+                    await speedChar.startNotifications();
+                    speedChar.addEventListener('characteristicvaluechanged', handleSpeed);
+                } catch(e) { console.warn("Pas de service vitesse séparé"); }
+
+                statusTxt.innerText = `Connecté à ${device.name}`;
+                connectBtn.style.display = 'none';
+                startBtn.style.display = 'block';
+                
+                // Lancer la boucle de mise à jour
+                setInterval(tick, 1000);
+
+            } catch (error) {
+                console.error(error);
+                statusTxt.innerText = "Erreur : " + error;
+            }
+        };
+
+        function handlePower(event) {
+            const data = event.target.value;
+            // Byte 0-1 flags, Byte 2-3 Watts (uint16)
+            currentWatts = data.getUint16(2, true);
+            document.getElementById('wattsVal').innerText = currentWatts;
+        }
+
+        function handleSpeed(event) {
+            const data = event.target.value;
+            const cumulativeWheelRevs = data.getUint32(1, true);
+            const lastWheelEventTime = data.getUint16(5, true);
+
+            if (lastWheelRevs !== null) {
+                let dRevs = cumulativeWheelRevs - lastWheelRevs;
+                let dTime = lastWheelEventTime - lastWheelTime;
+
+                if (dTime < 0) dTime += 65536;
+                if (dRevs < 0) dRevs += 4294967296;
+
+                if (dTime > 0) {
+                    const timeS = dTime / 1024.0;
+                    const distanceM = dRevs * WHEEL_CIRCUMFERENCE_M;
+                    currentSpeed = (distanceM / timeS) * 3.6;
+                    document.getElementById('speedVal').innerText = currentSpeed.toFixed(1);
+                }
+            }
+            lastWheelRevs = cumulativeWheelRevs;
+            lastWheelTime = lastWheelEventTime;
+        }
+
+        // --- SESSION LOGIC ---
+        startBtn.onclick = () => {
+            isRecording = true;
+            startTime = new Date();
+            sumWatts = 0; sumSpeed = 0; pedalingTime = 0;
+            history.time = []; history.watts = []; history.speed = [];
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'block';
+            document.getElementById('sessionTime').innerText = `Début : ${startTime.toLocaleTimeString()}`;
+        };
+
+        stopBtn.onclick = () => {
+            isRecording = false;
+            stopTime = new Date();
+            startBtn.style.display = 'block';
+            stopBtn.style.display = 'none';
+            document.getElementById('sessionTime').innerText += ` | Fin : ${stopTime.toLocaleTimeString()}`;
+        };
+
+        function tick() {
+            if (!isRecording) return;
+
+            const now = Date.now();
+            if (currentWatts > 0 || currentSpeed > 0.5) {
+                pedalingTime += 1;
+                sumWatts += currentWatts;
+                sumSpeed += currentSpeed;
+            }
+
+            // Moyennes
+            if (pedalingTime > 0) {
+                document.getElementById('avgWattsVal').innerText = `Moyenne : ${Math.round(sumWatts / pedalingTime)} W`;
+                document.getElementById('avgSpeedVal').innerText = `Moyenne : ${(sumSpeed / pedalingTime).toFixed(1)} km/h`;
+                
+                const mins = Math.floor(pedalingTime / 60);
+                const secs = pedalingTime % 60;
+                document.getElementById('durationVal').innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            // Charts
+            const elapsed = Math.round((now - startTime.getTime()) / 1000);
+            history.time.push(elapsed);
+            history.watts.push(currentWatts);
+            history.speed.push(currentSpeed);
+
+            // Garder seulement les 300 derniers points pour la fluidité
+            if (history.time.length > 300) {
+                history.time.shift(); history.watts.shift(); history.speed.shift();
+            }
+
+            wattsChart.data.labels = history.time;
+            wattsChart.data.datasets[0].data = history.watts;
+            wattsChart.update();
+
+            speedChart.data.labels = history.time;
+            speedChart.data.datasets[0].data = history.speed;
+            speedChart.update();
+        }
+    </script>
+</body>
+</html>
