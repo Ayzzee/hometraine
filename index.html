@@ -87,6 +87,24 @@
         .tab-btn.active { background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 
         #speedChartContainer { display: none; }
+
+        #logConsole {
+            margin-top: 20px;
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.8rem;
+            max-height: 200px;
+            overflow-y: auto;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+            display: none;
+        }
+        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #333; padding-bottom: 2px; }
+        .log-error { color: #ff5555; }
+        .log-warn { color: #ffff55; }
+        .log-info { color: #55ff55; }
     </style>
 </head>
 <body>
@@ -144,6 +162,10 @@
                 <canvas id="speedChart"></canvas>
             </div>
         </div>
+
+        <div id="logConsole">
+            <div style="font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #00ff00;">💻 Console de Diagnostic</div>
+        </div>
     </div>
 
     <script>
@@ -171,6 +193,41 @@
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
         const statusTxt = document.getElementById('status');
+        const logConsole = document.getElementById('logConsole');
+
+        function debugLog(msg, type = 'info') {
+            console.log(`[${type.toUpperCase()}] ${msg}`);
+            logConsole.style.display = 'block';
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            const now = new Date();
+            const timeStr = now.getHours().toString().padStart(2, '0') + ":" + 
+                            now.getMinutes().toString().padStart(2, '0') + ":" + 
+                            now.getSeconds().toString().padStart(2, '0');
+            entry.innerText = `[${timeStr}] ${msg}`;
+            logConsole.appendChild(entry);
+            logConsole.scrollTop = logConsole.scrollHeight;
+        }
+
+        // Vérifications initiales
+        window.addEventListener('DOMContentLoaded', () => {
+            debugLog("Démarrage du tableau de bord...");
+            
+            if (!window.isSecureContext) {
+                debugLog("ATTENTION : Le Bluetooth nécessite un contexte sécurisé (HTTPS). Si vous êtes en HTTP, cela ne fonctionnera pas.", "error");
+            } else {
+                debugLog("Contexte sécurisé (HTTPS) détecté.", "info");
+            }
+
+            if (!navigator.bluetooth) {
+                debugLog("Web Bluetooth n'est pas supporté par ce navigateur ou est désactivé.", "error");
+                if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+                    debugLog("Sur iOS, utilisez une application comme 'Bluefy' ou 'WebBLE' car Safari/Chrome ne supportent pas Web Bluetooth.", "warn");
+                }
+            } else {
+                debugLog("API Bluetooth détectée.", "info");
+            }
+        });
 
         // Initialisation Charts
         const ctxWatts = document.getElementById('wattsChart').getContext('2d');
@@ -195,33 +252,57 @@
 
         // --- BLUETOOTH LOGIC ---
         connectBtn.onclick = async () => {
+            debugLog("Tentative de connexion Bluetooth...");
             try {
+                if (!navigator.bluetooth) {
+                    throw new Error("Navigateur non compatible Web Bluetooth");
+                }
+
                 statusTxt.innerText = "Recherche d'appareils...";
+                debugLog("Ouverture de la fenêtre de sélection d'appareil...");
+                
                 device = await navigator.bluetooth.requestDevice({
                     filters: [{ namePrefix: 'TURNO' }, { namePrefix: 'MISURO' }, { namePrefix: 'ELITE' }],
                     optionalServices: [0x1818, 0x1816]
                 });
 
+                debugLog(`Appareil sélectionné : ${device.name}`);
                 statusTxt.innerText = `Connexion à ${device.name}...`;
+                
+                debugLog("Connexion au serveur GATT...");
                 server = await device.gatt.connect();
+                debugLog("Serveur GATT connecté.");
 
                 // Service Puissance
                 try {
+                    debugLog("Recherche du service Puissance (0x1818)...");
                     const powerService = await server.getPrimaryService(0x1818);
+                    debugLog("Service Puissance trouvé. Recherche de la caractéristique...");
                     const powerChar = await powerService.getCharacteristic(0x2a63);
+                    debugLog("Caractéristique trouvée. Activation des notifications...");
                     await powerChar.startNotifications();
                     powerChar.addEventListener('characteristicvaluechanged', handlePower);
-                } catch(e) { console.warn("Pas de service puissance séparé"); }
+                    debugLog("Notifications Puissance activées.");
+                } catch(e) { 
+                    debugLog(`Service Puissance non trouvé ou erreur: ${e.message}`, "warn");
+                }
 
                 // Service Vitesse
                 try {
+                    debugLog("Recherche du service Vitesse (0x1816)...");
                     const speedService = await server.getPrimaryService(0x1816);
+                    debugLog("Service Vitesse trouvé. Recherche de la caractéristique...");
                     const speedChar = await speedService.getCharacteristic(0x2a5b);
+                    debugLog("Caractéristique trouvée. Activation des notifications...");
                     await speedChar.startNotifications();
                     speedChar.addEventListener('characteristicvaluechanged', handleSpeed);
-                } catch(e) { console.warn("Pas de service vitesse séparé"); }
+                    debugLog("Notifications Vitesse activées.");
+                } catch(e) { 
+                    debugLog(`Service Vitesse non trouvé ou erreur: ${e.message}`, "warn");
+                }
 
                 statusTxt.innerText = `Connecté à ${device.name}`;
+                debugLog("Système prêt !");
                 connectBtn.style.display = 'none';
                 startBtn.style.display = 'block';
                 
@@ -230,7 +311,8 @@
 
             } catch (error) {
                 console.error(error);
-                statusTxt.innerText = "Erreur : " + error;
+                debugLog(`ERREUR : ${error.message}`, "error");
+                statusTxt.innerText = "Erreur : " + error.message;
             }
         };
 
