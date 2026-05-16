@@ -1,0 +1,1 @@
+exclude: [venv, __pycache__, requirements.txt, script2.py, start.sh]
